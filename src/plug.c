@@ -19,7 +19,7 @@
 #define GLSL_VERSION 330
 
 #define N (1 << 14)
-#define FONT_SIZE 64
+#define FONT_SIZE 120  
 
 #define RENDER_FPS 30
 #define RENDER_FACTOR 100
@@ -488,6 +488,16 @@ static void timeline(Rectangle timeline_boundary, Track *track)
     // TODO: visualize sound wave on the timeline
 }
 
+static int text_width(Font *font, int text_length) {
+    // This is a rough estimation
+
+    float sum = 0; 
+    for (int i = 0; i < font->glyphCount; i++) {
+        sum += font->glyphs[i].image.width;
+    }
+    return (int) (sum/font->glyphCount)*text_length; 
+}
+
 static void tracks_panel(Rectangle panel_boundary)
 {
     DrawRectangleRec(panel_boundary, COLOR_TRACK_PANEL_BACKGROUND);
@@ -569,24 +579,19 @@ static void tracks_panel(Rectangle panel_boundary)
         float text_padding = item_boundary.width * 0.05;
         Vector2 size = MeasureTextEx(p->font, text, fontSize, 0);
         
-        #if 0 
-        int xChars; 
-        if (size.x > item_boundary.width) {
-            xChars = item_boundary.width / fontSize * 1.85;
-        } else {
-            xChars = size.x / fontSize * 1.85;
-        }
-        char textCut[xChars+1]; 
-        strncpy(textCut, text, xChars);  
-        textCut[xChars] = '\0'; 
-        #endif 
+        // An attempt at implementing overflow cutoff 
+        // int xChars = text_width(&p->font, strlen(text)); 
+        // char textCut[xChars+1]; 
+        // strncpy(textCut, text, xChars);  
+        // textCut[xChars] = '\0'; 
+
+        // printf("%d\n", xChars); 
         
         Vector2 position = {
             .x = item_boundary.x + text_padding,
             .y = item_boundary.y + item_boundary.height * 0.5 - size.y * 0.5,
         };
         // TODO: cut out overflown text
-        // TODO: use SDF fonts
         BeginShaderMode(p->sdf); 
         #if 0 
         DrawTextEx(p->font, textCut, position, fontSize, 0, WHITE);
@@ -594,7 +599,6 @@ static void tracks_panel(Rectangle panel_boundary)
         DrawTextEx(p->font, text, position, fontSize, 0, WHITE);
         #endif 
         EndShaderMode(); 
-
     }
 
     // TODO: jump to specific place by clicking the scrollbar
@@ -1029,14 +1033,14 @@ static void preview_screen(void)
         const char *label = "Drag&Drop Music Here";
         Color color = WHITE;
         // Vector2 size = MeasureTextEx(p->font, label, p->font.baseSize, 0);
-        Vector2 size = MeasureTextEx(p->font, label, FONT_SIZE*2, 0);
+        Vector2 size = MeasureTextEx(p->font, label, FONT_SIZE, 0);
         Vector2 position = {
             w / 2 - size.x / 2,
             h / 2 - size.y / 2,
         };
         BeginShaderMode(p->sdf);
         // DrawTextEx(p->font, label, position, p->font.baseSize, 0, color);
-        DrawTextEx(p->font, label, position, FONT_SIZE*2, 0, color);
+        DrawTextEx(p->font, label, position, FONT_SIZE, 0, color);
         EndShaderMode(); 
     }
 }
@@ -1244,32 +1248,14 @@ void font_load_sdf(Font* font, const char* fileName) {
     // This is basically https://github.com/raysan5/raylib/blob/master/examples/text/text_font_sdf.c
     unsigned int fontFileSize = 0;
     unsigned char *fontFileData = LoadFileData(fileName, &fontFileSize);
-    #if 0
-    // Default font generation from TTF font
-    // Font fontDefault = {0};
-    fontDefault->baseSize = 16;
-    fontDefault->glyphCount = 95;
-    // Loading font data from memory data
-    // Parameters > font size: 16, no glyphs array provided (0), glyphs count: 95 (autogenerate chars array)
-    fontDefault->glyphs = LoadFontData(fontFileData, fontFileSize, 16, 0, 95, FONT_DEFAULT);
-    // Parameters > glyphs count: 95, font size: 16, glyphs padding in image: 4 px, pack method: 0 (default)
-    Image atlas = GenImageFontAtlas(fontDefault->glyphs, &fontDefault->recs, 95, 16, 4, 0);
-
-    fontDefault->texture = LoadTextureFromImage(atlas); 
-    UnloadImage(atlas); 
-    #endif 
-
-    font->baseSize = 16;
+    font->baseSize = FONT_SIZE;
     font->glyphCount = 95;
-    // Parameters > font size: 16, no glyphs array provided (0), glyphs count: 0 (defaults to 95)
-    font->glyphs = LoadFontData(fontFileData, fontFileSize, 16, 0, 0, FONT_SDF); 
-    Image atlas = GenImageFontAtlas(font->glyphs, &font->recs, 95, 16, 0, 1);
+    font->glyphs = LoadFontData(fontFileData, fontFileSize, FONT_SIZE, 0, 0, FONT_SDF); 
+    Image atlas = GenImageFontAtlas(font->glyphs, &font->recs, 95, FONT_SIZE, 0, 1); // packMethod 1 == stb_rect_pack
     font->texture = LoadTextureFromImage(atlas); 
     UnloadImage(atlas); 
     SetTextureFilter(font->texture, TEXTURE_FILTER_BILINEAR); 
-
     UnloadFileData(fontFileData);
-
 }
 
 void plug_init(void)
@@ -1290,10 +1276,8 @@ void plug_init(void)
         "./resources/fonts/anonymous_pro_bold.ttf"
     }; 
 
-
     // Load font as SDF font 
     // TODO Implement SDF shader for GLSL 120
-    // TODO Implement better shader 
     p->sdf = LoadShader(0, TextFormat("./resources/shaders/glsl%d/sdf.fs", GLSL_VERSION));
     Font font = { 0 }; 
     // font_load_sdf(&fontSdf, "./resources/fonts/theano-didot/TheanoDidot-Regular.ttf"); 
